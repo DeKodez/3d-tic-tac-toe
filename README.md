@@ -6,7 +6,7 @@ A 2-player local game with 6 independent 3×3 tic-tac-toe faces. Players alterna
 
 ```
 pip install -r requirements.txt
-python main.py # will be implemented
+python main.py
 ```
 
 ## Rules

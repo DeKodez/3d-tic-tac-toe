@@ -10,6 +10,7 @@ from ui.renderer import Renderer
 
 
 def main() -> None:
+    """Initialize Pygame, wire up components, and run the game loop."""
     pygame.init()
     surface = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("3D Tic-Tac-Toe")
