@@ -1,0 +1,18 @@
+# 3D Tic-Tac-Toe
+
+A 2-player local game with 6 independent 3×3 tic-tac-toe faces. Players alternate turns placing X or O on any unlocked face. A face locks when won or drawn. The game ends when all 6 faces are resolved — the player with the most face wins takes the game.
+
+## Setup
+
+```
+pip install -r requirements.txt
+python main.py # will be implemented
+```
+
+## Rules
+
+- Player X goes first. Turns alternate globally.
+- On your turn, pick any unlocked face and place your mark.
+- Win a face by getting 3-in-a-row (row, column, or diagonal).
+- A full face with no winner is a draw — no points awarded.
+- Most face wins at the end takes the game. Ties are possible.
