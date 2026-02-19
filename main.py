@@ -27,11 +27,11 @@ def main() -> None:
             if event.type == pygame.QUIT:
                 running = False
 
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if game.is_game_over():
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
                     running = False
-                    break
 
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 action = input_handler.handle_click(event.pos)
 
                 if isinstance(action, NavigateAction):
@@ -40,9 +40,10 @@ def main() -> None:
                     ]
 
                 elif isinstance(action, PlaceMoveAction):
-                    game.make_move(
-                        active_face_index, action.row, action.col
-                    )
+                    if not game.is_game_over():
+                        game.make_move(
+                            active_face_index, action.row, action.col
+                        )
 
         renderer.draw(surface, game, active_face_index)
         pygame.display.flip()

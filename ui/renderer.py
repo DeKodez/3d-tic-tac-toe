@@ -36,11 +36,13 @@ from ui.constants import (
     GRID_WIDTH,
     MARK_LINE_WIDTH,
     MARK_PADDING,
+    NUM_FACES,
     O_COLOR,
     STATUS_BAR_HEIGHT,
     STATUS_BAR_Y,
     STATUS_BG,
     TEXT_COLOR,
+    WINDOW_HEIGHT,
     WINDOW_WIDTH,
     X_COLOR,
 )
@@ -82,7 +84,7 @@ class Renderer:
         )
 
         if game.is_game_over():
-            self._draw_game_over(surface, game.get_result_text())
+            self._draw_game_over(surface, game.get_result_text(), game.faces)
 
     # --- Face label (top center) ---
 
@@ -375,7 +377,7 @@ class Renderer:
         pygame.draw.circle(surface, O_COLOR, center, radius, MARK_LINE_WIDTH)
 
     def _draw_winning_line(self, surface: pygame.Surface, board: Board) -> None:
-        """Draw a line through the 3 winning cells."""
+        """Draw a prominent line through the 3 winning cells with a glow."""
         if board.winning_cells is None:
             return
 
@@ -394,7 +396,18 @@ class Renderer:
             oy + end_r * CELL_SIZE + CELL_SIZE // 2,
         )
 
-        pygame.draw.line(surface, color, start_pos, end_pos, MARK_LINE_WIDTH + 2)
+        # Glow backdrop (wider, semi-transparent)
+        glow_color = (*color, 60)
+        glow_surf = pygame.Surface(
+            (GRID_WIDTH + 20, GRID_HEIGHT + 20), pygame.SRCALPHA
+        )
+        glow_start = (start_pos[0] - ox + 10, start_pos[1] - oy + 10)
+        glow_end = (end_pos[0] - ox + 10, end_pos[1] - oy + 10)
+        pygame.draw.line(glow_surf, glow_color, glow_start, glow_end, 16)
+        surface.blit(glow_surf, (ox - 10, oy - 10))
+
+        # Main line
+        pygame.draw.line(surface, color, start_pos, end_pos, MARK_LINE_WIDTH + 3)
 
     # --- Status bar ---
 
@@ -426,25 +439,61 @@ class Renderer:
 
     # --- Game over ---
 
-    def _draw_game_over(self, surface: pygame.Surface, result_text: str) -> None:
-        """Draw a semi-transparent overlay with the final result."""
+    def _draw_game_over(
+        self,
+        surface: pygame.Surface,
+        result_text: str,
+        faces: list[Board],
+    ) -> None:
+        """Draw a semi-transparent overlay with the final result and face breakdown."""
         overlay = pygame.Surface(
-            (WINDOW_WIDTH, surface.get_height()), pygame.SRCALPHA
+            (WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA
         )
-        overlay.fill((0, 0, 0, 160))
+        overlay.fill((0, 0, 0, 180))
         surface.blit(overlay, (0, 0))
 
-        # Result text
-        result_surf = self._font_game_over.render(result_text, True, TEXT_COLOR)
-        result_rect = result_surf.get_rect(
-            center=(WINDOW_WIDTH // 2, surface.get_height() // 2 - 20)
-        )
+        center_x = WINDOW_WIDTH // 2
+        center_y = WINDOW_HEIGHT // 2
+
+        # Title: "GAME OVER"
+        title_surf = self._font_game_over.render("GAME OVER", True, TEXT_COLOR)
+        title_rect = title_surf.get_rect(center=(center_x, center_y - 80))
+        surface.blit(title_surf, title_rect)
+
+        # Result text (e.g. "Player X wins 4-2!")
+        result_surf = self._font_face_label.render(result_text, True, TEXT_COLOR)
+        result_rect = result_surf.get_rect(center=(center_x, center_y - 45))
         surface.blit(result_surf, result_rect)
 
+        # Per-face breakdown
+        breakdown_y = center_y - 10
+        for i in range(NUM_FACES):
+            face = faces[i]
+            label = FACE_LABELS[i]
+
+            if face.status == FaceStatus.WON_X:
+                status_str = "X"
+                color = X_COLOR
+            elif face.status == FaceStatus.WON_O:
+                status_str = "O"
+                color = O_COLOR
+            else:
+                status_str = "-"
+                color = (120, 120, 120)
+
+            line_text = f"{label}: {status_str}"
+            line_surf = self._font_game_over_sub.render(line_text, True, color)
+
+            # Arrange in two columns (3 per column)
+            col = i // 3
+            row = i % 3
+            lx = center_x - 80 + col * 160
+            ly = breakdown_y + row * 26
+            line_rect = line_surf.get_rect(centerx=lx, top=ly)
+            surface.blit(line_surf, line_rect)
+
         # Sub text
-        sub_text = "Click anywhere to exit"
-        sub_surf = self._font_game_over_sub.render(sub_text, True, TEXT_COLOR)
-        sub_rect = sub_surf.get_rect(
-            center=(WINDOW_WIDTH // 2, surface.get_height() // 2 + 30)
-        )
+        sub_text = "Navigate with arrows to review  |  Press ESC to exit"
+        sub_surf = self._font_game_over_sub.render(sub_text, True, (160, 160, 160))
+        sub_rect = sub_surf.get_rect(center=(center_x, center_y + 100))
         surface.blit(sub_surf, sub_rect)
