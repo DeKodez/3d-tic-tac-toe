@@ -10,23 +10,27 @@ from game.enums import CellState, FaceStatus, Player
 from game.game_controller import GameController
 from ui.constants import (
     ARROW_BG,
+    ARROW_HOVER,
     ARROW_ICON,
     ARROW_PADDING,
     ARROW_SIZE,
     ARROWS,
     BG_COLOR,
+    CELL_HOVER,
     CELL_SIZE,
     CUBE_EDGE_BACK_COLOR,
     CUBE_EDGE_COLOR,
     CUBE_LEGEND_CX,
     CUBE_LEGEND_CY,
     CUBE_LEGEND_R,
+    FACE_ADJACENCY,
     FACE_LABELS,
     FACE_LABEL_Y,
     FONT_SIZE_CUBE_LABEL,
     FONT_SIZE_FACE_LABEL,
     FONT_SIZE_GAME_OVER,
     FONT_SIZE_GAME_OVER_SUB,
+    FONT_SIZE_LOCKED_LABEL,
     FONT_SIZE_STATUS,
     GRID_COLOR,
     GRID_HEIGHT,
@@ -34,6 +38,8 @@ from ui.constants import (
     GRID_ORIGIN_X,
     GRID_ORIGIN_Y,
     GRID_WIDTH,
+    LOCKED_LABEL_COLOR,
+    LOCKED_OVERLAY,
     MARK_LINE_WIDTH,
     MARK_PADDING,
     NUM_FACES,
@@ -58,6 +64,7 @@ class Renderer:
         self._font_face_label = pygame.font.SysFont(None, FONT_SIZE_FACE_LABEL)
         self._font_cube_label = pygame.font.SysFont(None, FONT_SIZE_CUBE_LABEL)
         self._font_status = pygame.font.SysFont(None, FONT_SIZE_STATUS)
+        self._font_locked_label = pygame.font.SysFont(None, FONT_SIZE_LOCKED_LABEL)
         self._font_game_over = pygame.font.SysFont(None, FONT_SIZE_GAME_OVER)
         self._font_game_over_sub = pygame.font.SysFont(None, FONT_SIZE_GAME_OVER_SUB)
         self._cube_geometry = self._compute_cube_geometry()
@@ -67,6 +74,7 @@ class Renderer:
         surface: pygame.Surface,
         game: GameController,
         active_face_index: int,
+        mouse_pos: tuple[int, int] = (0, 0),
     ) -> None:
         """Master draw call — clears screen and draws everything."""
         surface.fill(BG_COLOR)
@@ -75,8 +83,17 @@ class Renderer:
 
         self._draw_face_label(surface, active_face_index, active_board)
         self._draw_cube_legend(surface, active_face_index, game.faces)
-        self._draw_arrows(surface)
+        self._draw_arrows(surface, active_face_index, game.faces, mouse_pos)
         self._draw_grid(surface, active_board)
+
+        # Hover highlight on valid cells
+        if not active_board.is_locked() and not game.is_game_over():
+            self._draw_cell_hover(surface, active_board, mouse_pos)
+
+        # Locked face overlay
+        if active_board.is_locked():
+            self._draw_locked_overlay(surface, active_board)
+
         self._draw_status_bar(
             surface,
             game.current_player,
@@ -109,6 +126,68 @@ class Renderer:
         text_surf = self._font_face_label.render(label, True, color)
         text_rect = text_surf.get_rect(centerx=WINDOW_WIDTH // 2, y=FACE_LABEL_Y)
         surface.blit(text_surf, text_rect)
+
+    # --- Cell hover highlight ---
+
+    def _draw_cell_hover(
+        self,
+        surface: pygame.Surface,
+        board: Board,
+        mouse_pos: tuple[int, int],
+    ) -> None:
+        """Draw a subtle highlight on the cell under the mouse cursor."""
+        mx, my = mouse_pos
+        ox, oy = GRID_ORIGIN_X, GRID_ORIGIN_Y
+
+        if not (ox <= mx < ox + GRID_WIDTH and oy <= my < oy + GRID_HEIGHT):
+            return
+
+        col = min((mx - ox) // CELL_SIZE, 2)
+        row = min((my - oy) // CELL_SIZE, 2)
+
+        # Only highlight empty cells
+        if board.get_cell(row, col) != CellState.EMPTY:
+            return
+
+        cell_rect = pygame.Rect(
+            ox + col * CELL_SIZE + 1,
+            oy + row * CELL_SIZE + 1,
+            CELL_SIZE - 2,
+            CELL_SIZE - 2,
+        )
+        hover_surf = pygame.Surface(
+            (cell_rect.width, cell_rect.height), pygame.SRCALPHA
+        )
+        hover_surf.fill((*CELL_HOVER, 120))
+        surface.blit(hover_surf, cell_rect.topleft)
+
+    # --- Locked face overlay ---
+
+    def _draw_locked_overlay(
+        self, surface: pygame.Surface, board: Board
+    ) -> None:
+        """Draw a dim overlay on a locked face with a status label."""
+        ox, oy = GRID_ORIGIN_X, GRID_ORIGIN_Y
+        overlay = pygame.Surface((GRID_WIDTH, GRID_HEIGHT), pygame.SRCALPHA)
+        overlay.fill(LOCKED_OVERLAY)
+        surface.blit(overlay, (ox, oy))
+
+        if board.status == FaceStatus.WON_X:
+            label = "Won by X"
+            color = X_COLOR
+        elif board.status == FaceStatus.WON_O:
+            label = "Won by O"
+            color = O_COLOR
+        else:
+            label = "Draw"
+            color = LOCKED_LABEL_COLOR
+
+        label_surf = self._font_locked_label.render(label, True, color)
+        label_rect = label_surf.get_rect(
+            centerx=ox + GRID_WIDTH // 2,
+            bottom=oy + GRID_HEIGHT - 10,
+        )
+        surface.blit(label_surf, label_rect)
 
     # --- Mini isometric cube legend (top left) ---
 
@@ -262,11 +341,36 @@ class Renderer:
 
     # --- Arrow buttons ---
 
-    def _draw_arrows(self, surface: pygame.Surface) -> None:
-        """Draw the 4 directional arrow buttons around the grid."""
+    def _draw_arrows(
+        self,
+        surface: pygame.Surface,
+        active_face_index: int,
+        faces: list[Board],
+        mouse_pos: tuple[int, int],
+    ) -> None:
+        """Draw the 4 directional arrow buttons with status-tinted borders."""
+        mx, my = mouse_pos
+
         for direction, pos in ARROWS.items():
             rect = pygame.Rect(pos[0], pos[1], ARROW_SIZE, ARROW_SIZE)
-            pygame.draw.rect(surface, ARROW_BG, rect, border_radius=4)
+            hovered = rect.collidepoint(mx, my)
+
+            # Background (lighter on hover)
+            bg = ARROW_HOVER if hovered else ARROW_BG
+            pygame.draw.rect(surface, bg, rect, border_radius=4)
+
+            # Tinted border based on neighbor face status
+            neighbor_idx = FACE_ADJACENCY[active_face_index][direction]
+            neighbor = faces[neighbor_idx]
+            if neighbor.status == FaceStatus.WON_X:
+                border_color = X_COLOR
+            elif neighbor.status == FaceStatus.WON_O:
+                border_color = O_COLOR
+            elif neighbor.status == FaceStatus.DRAW:
+                border_color = (100, 100, 100)
+            else:
+                border_color = (80, 80, 80)
+            pygame.draw.rect(surface, border_color, rect, 2, border_radius=4)
 
             cx = rect.centerx
             cy = rect.centery

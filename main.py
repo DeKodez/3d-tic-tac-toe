@@ -45,7 +45,8 @@ def main() -> None:
                             active_face_index, action.row, action.col
                         )
 
-        renderer.draw(surface, game, active_face_index)
+        mouse_pos = pygame.mouse.get_pos()
+        renderer.draw(surface, game, active_face_index, mouse_pos)
         pygame.display.flip()
         clock.tick(30)
 
