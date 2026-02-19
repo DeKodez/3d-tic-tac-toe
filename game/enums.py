@@ -1,8 +1,6 @@
 """Game enums — CellState, Player, FaceStatus, GamePhase."""
 
 from enum import Enum
-from typing import Optional
-
 
 class CellState(Enum):
     """Represents the state of a single cell on a face."""
