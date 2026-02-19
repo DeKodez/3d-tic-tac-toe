@@ -1,0 +1,56 @@
+"""UI constants — colors, dimensions, layout positions, and labels."""
+
+# --- Colors (R, G, B) ---
+BG_COLOR = (30, 30, 30)
+GRID_COLOR = (200, 200, 200)
+X_COLOR = (70, 130, 230)
+O_COLOR = (230, 70, 70)
+CELL_HOVER = (60, 60, 60)
+TEXT_COLOR = (255, 255, 255)
+
+TAB_ACTIVE = (80, 80, 80)
+TAB_INACTIVE = (50, 50, 50)
+TAB_WON_X = (40, 70, 130)
+TAB_WON_O = (130, 40, 40)
+TAB_DRAW = (70, 70, 70)
+TAB_BORDER = (120, 120, 120)
+
+STATUS_BG = (40, 40, 40)
+
+# --- Window ---
+WINDOW_WIDTH = 700
+WINDOW_HEIGHT = 620
+
+# --- Grid ---
+CELL_SIZE = 120
+GRID_LINE_WIDTH = 3
+GRID_WIDTH = CELL_SIZE * 3
+GRID_HEIGHT = CELL_SIZE * 3
+GRID_ORIGIN_X = (WINDOW_WIDTH - GRID_WIDTH) // 2
+GRID_ORIGIN_Y = 100
+
+# --- Marks ---
+MARK_PADDING = 25
+MARK_LINE_WIDTH = 4
+
+# --- Face tabs ---
+TAB_COUNT = 6
+TAB_WIDTH = 90
+TAB_HEIGHT = 36
+TAB_GAP = 10
+TAB_TOTAL_WIDTH = TAB_COUNT * TAB_WIDTH + (TAB_COUNT - 1) * TAB_GAP
+TAB_START_X = (WINDOW_WIDTH - TAB_TOTAL_WIDTH) // 2
+TAB_Y = 30
+
+# --- Status bar ---
+STATUS_BAR_Y = GRID_ORIGIN_Y + GRID_HEIGHT + 30
+STATUS_BAR_HEIGHT = 40
+
+# --- Labels ---
+FACE_LABELS = ["Face 1", "Face 2", "Face 3", "Face 4", "Face 5", "Face 6"]
+
+# --- Fonts ---
+FONT_SIZE_TAB = 18
+FONT_SIZE_STATUS = 22
+FONT_SIZE_GAME_OVER = 36
+FONT_SIZE_GAME_OVER_SUB = 20
