@@ -1,4 +1,7 @@
 """Renderer — all Pygame drawing logic. Reads game state, never mutates it."""
+# pylint: disable=no-member
+
+import math
 
 import pygame
 
@@ -6,37 +9,37 @@ from game.board import Board
 from game.enums import CellState, FaceStatus, Player
 from game.game_controller import GameController
 from ui.constants import (
+    ARROW_BG,
+    ARROW_ICON,
+    ARROW_PADDING,
+    ARROW_SIZE,
+    ARROWS,
     BG_COLOR,
-    CELL_HOVER,
     CELL_SIZE,
+    CUBE_EDGE_BACK_COLOR,
+    CUBE_EDGE_COLOR,
+    CUBE_LEGEND_CX,
+    CUBE_LEGEND_CY,
+    CUBE_LEGEND_R,
     FACE_LABELS,
+    FACE_LABEL_Y,
+    FONT_SIZE_CUBE_LABEL,
+    FONT_SIZE_FACE_LABEL,
     FONT_SIZE_GAME_OVER,
     FONT_SIZE_GAME_OVER_SUB,
     FONT_SIZE_STATUS,
-    FONT_SIZE_TAB,
     GRID_COLOR,
+    GRID_HEIGHT,
     GRID_LINE_WIDTH,
     GRID_ORIGIN_X,
     GRID_ORIGIN_Y,
     GRID_WIDTH,
-    GRID_HEIGHT,
     MARK_LINE_WIDTH,
     MARK_PADDING,
     O_COLOR,
     STATUS_BAR_HEIGHT,
     STATUS_BAR_Y,
     STATUS_BG,
-    TAB_ACTIVE,
-    TAB_BORDER,
-    TAB_DRAW,
-    TAB_GAP,
-    TAB_HEIGHT,
-    TAB_INACTIVE,
-    TAB_START_X,
-    TAB_WIDTH,
-    TAB_WON_O,
-    TAB_WON_X,
-    TAB_Y,
     TEXT_COLOR,
     WINDOW_WIDTH,
     X_COLOR,
@@ -50,10 +53,12 @@ class Renderer:
     """
 
     def __init__(self) -> None:
-        self._font_tab = pygame.font.SysFont(None, FONT_SIZE_TAB)
+        self._font_face_label = pygame.font.SysFont(None, FONT_SIZE_FACE_LABEL)
+        self._font_cube_label = pygame.font.SysFont(None, FONT_SIZE_CUBE_LABEL)
         self._font_status = pygame.font.SysFont(None, FONT_SIZE_STATUS)
         self._font_game_over = pygame.font.SysFont(None, FONT_SIZE_GAME_OVER)
         self._font_game_over_sub = pygame.font.SysFont(None, FONT_SIZE_GAME_OVER_SUB)
+        self._cube_geometry = self._compute_cube_geometry()
 
     def draw(
         self,
@@ -66,7 +71,9 @@ class Renderer:
 
         active_board = game.get_face(active_face_index)
 
-        self._draw_face_tabs(surface, game.faces, active_face_index)
+        self._draw_face_label(surface, active_face_index, active_board)
+        self._draw_cube_legend(surface, active_face_index, game.faces)
+        self._draw_arrows(surface)
         self._draw_grid(surface, active_board)
         self._draw_status_bar(
             surface,
@@ -76,6 +83,219 @@ class Renderer:
 
         if game.is_game_over():
             self._draw_game_over(surface, game.get_result_text())
+
+    # --- Face label (top center) ---
+
+    def _draw_face_label(
+        self, surface: pygame.Surface, face_index: int, board: Board
+    ) -> None:
+        """Draw the current face name and status above the grid."""
+        label = FACE_LABELS[face_index]
+
+        if board.status == FaceStatus.WON_X:
+            label += "  \u2014  Won by X"
+            color = X_COLOR
+        elif board.status == FaceStatus.WON_O:
+            label += "  \u2014  Won by O"
+            color = O_COLOR
+        elif board.status == FaceStatus.DRAW:
+            label += "  \u2014  Draw"
+            color = (150, 150, 150)
+        else:
+            color = TEXT_COLOR
+
+        text_surf = self._font_face_label.render(label, True, color)
+        text_rect = text_surf.get_rect(centerx=WINDOW_WIDTH // 2, y=FACE_LABEL_Y)
+        surface.blit(text_surf, text_rect)
+
+    # --- Mini isometric cube legend (top left) ---
+
+    @staticmethod
+    def _compute_cube_geometry() -> dict:
+        """Pre-compute the vertices, face polygons, and edges for the legend cube."""
+        cx = CUBE_LEGEND_CX
+        cy = CUBE_LEGEND_CY
+        r = CUBE_LEGEND_R
+
+        dx = int(r * math.cos(math.radians(30)))
+        dy = r // 2
+
+        center = (cx, cy)
+        top = (cx, cy - r)
+        tr = (cx + dx, cy - dy)
+        br = (cx + dx, cy + dy)
+        bottom = (cx, cy + r)
+        bl = (cx - dx, cy + dy)
+        tl = (cx - dx, cy - dy)
+
+        # Each face maps to a rhombus (2 triangular sectors of the hexagon).
+        # Opposite faces occupy non-overlapping areas.
+        face_polygons = [
+            [center, tl, top, tr],        # 0: Top     — upper rhombus
+            [center, tr, br, bottom],     # 1: Front   — lower-right rhombus
+            [center, bottom, bl, tl],     # 2: Left    — lower-left rhombus
+            [center, br, bottom, bl],     # 3: Bottom  — lower rhombus
+            [center, bl, tl, top],        # 4: Back    — upper-left rhombus
+            [center, top, tr, br],        # 5: Right   — upper-right rhombus
+        ]
+
+        # Outer hexagon edges (always solid)
+        outer_edges = [
+            (top, tr), (tr, br), (br, bottom),
+            (bottom, bl), (bl, tl), (tl, top),
+        ]
+
+        # Front spokes (from nearest corner v0 → center, drawn solid)
+        front_spokes = [(center, top), (center, br), (center, bl)]
+
+        # Back spokes (from farthest corner v6 → center, drawn dashed)
+        back_spokes = [(center, bottom), (center, tr), (center, tl)]
+
+        return {
+            "face_polygons": face_polygons,
+            "outer_edges": outer_edges,
+            "front_spokes": front_spokes,
+            "back_spokes": back_spokes,
+        }
+
+    def _draw_cube_legend(
+        self,
+        surface: pygame.Surface,
+        active_face_index: int,
+        faces: list[Board],
+    ) -> None:
+        """Draw the mini isometric cube with the active face highlighted."""
+        geo = self._cube_geometry
+
+        # Fill won/drawn faces with tinted colors
+        for i, face in enumerate(faces):
+            if face.status == FaceStatus.WON_X:
+                self._fill_polygon_alpha(
+                    surface, geo["face_polygons"][i], (*X_COLOR, 60)
+                )
+            elif face.status == FaceStatus.WON_O:
+                self._fill_polygon_alpha(
+                    surface, geo["face_polygons"][i], (*O_COLOR, 60)
+                )
+            elif face.status == FaceStatus.DRAW:
+                self._fill_polygon_alpha(
+                    surface, geo["face_polygons"][i], (150, 150, 150, 40)
+                )
+
+        # Highlight the active face
+        self._fill_polygon_alpha(
+            surface, geo["face_polygons"][active_face_index], (255, 255, 255, 80)
+        )
+
+        # Outer hexagon edges (solid)
+        for start, end in geo["outer_edges"]:
+            pygame.draw.line(surface, CUBE_EDGE_COLOR, start, end, 2)
+
+        # Front spokes (solid)
+        for start, end in geo["front_spokes"]:
+            pygame.draw.line(surface, CUBE_EDGE_COLOR, start, end, 2)
+
+        # Back spokes (dashed)
+        for start, end in geo["back_spokes"]:
+            self._draw_dashed_line(surface, CUBE_EDGE_BACK_COLOR, start, end, 1)
+
+        # Small label beneath the cube
+        label_surf = self._font_cube_label.render(
+            FACE_LABELS[active_face_index], True, TEXT_COLOR
+        )
+        label_rect = label_surf.get_rect(
+            centerx=CUBE_LEGEND_CX, top=CUBE_LEGEND_CY + CUBE_LEGEND_R + 6
+        )
+        surface.blit(label_surf, label_rect)
+
+    @staticmethod
+    def _fill_polygon_alpha(
+        surface: pygame.Surface,
+        polygon: list[tuple[int, int]],
+        color_rgba: tuple[int, int, int, int],
+    ) -> None:
+        """Draw a filled polygon with per-pixel alpha onto the surface."""
+        xs = [p[0] for p in polygon]
+        ys = [p[1] for p in polygon]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        w = max_x - min_x + 1
+        h = max_y - min_y + 1
+
+        temp = pygame.Surface((w, h), pygame.SRCALPHA)
+        offset_polygon = [(x - min_x, y - min_y) for x, y in polygon]
+        pygame.draw.polygon(temp, color_rgba, offset_polygon)
+        surface.blit(temp, (min_x, min_y))
+
+    @staticmethod
+    def _draw_dashed_line(
+        surface: pygame.Surface,
+        color: tuple[int, int, int],
+        start: tuple[int, int],
+        end: tuple[int, int],
+        width: int = 1,
+        dash_len: int = 4,
+        gap_len: int = 3,
+    ) -> None:
+        """Draw a dashed line between two points."""
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        length = math.sqrt(dx * dx + dy * dy)
+        if length == 0:
+            return
+        dx_n, dy_n = dx / length, dy / length
+
+        pos = 0.0
+        drawing = True
+        while pos < length:
+            seg = min(dash_len if drawing else gap_len, length - pos)
+            if drawing:
+                sx = int(start[0] + dx_n * pos)
+                sy = int(start[1] + dy_n * pos)
+                ex = int(start[0] + dx_n * (pos + seg))
+                ey = int(start[1] + dy_n * (pos + seg))
+                pygame.draw.line(surface, color, (sx, sy), (ex, ey), width)
+            pos += seg
+            drawing = not drawing
+
+    # --- Arrow buttons ---
+
+    def _draw_arrows(self, surface: pygame.Surface) -> None:
+        """Draw the 4 directional arrow buttons around the grid."""
+        for direction, pos in ARROWS.items():
+            rect = pygame.Rect(pos[0], pos[1], ARROW_SIZE, ARROW_SIZE)
+            pygame.draw.rect(surface, ARROW_BG, rect, border_radius=4)
+
+            cx = rect.centerx
+            cy = rect.centery
+            p = ARROW_PADDING
+
+            if direction == "up":
+                tri = [
+                    (cx, rect.top + p),
+                    (rect.left + p, rect.bottom - p),
+                    (rect.right - p, rect.bottom - p),
+                ]
+            elif direction == "down":
+                tri = [
+                    (cx, rect.bottom - p),
+                    (rect.left + p, rect.top + p),
+                    (rect.right - p, rect.top + p),
+                ]
+            elif direction == "left":
+                tri = [
+                    (rect.left + p, cy),
+                    (rect.right - p, rect.top + p),
+                    (rect.right - p, rect.bottom - p),
+                ]
+            else:  # right
+                tri = [
+                    (rect.right - p, cy),
+                    (rect.left + p, rect.top + p),
+                    (rect.left + p, rect.bottom - p),
+                ]
+
+            pygame.draw.polygon(surface, ARROW_ICON, tri)
 
     # --- Grid ---
 
@@ -176,47 +396,6 @@ class Renderer:
 
         pygame.draw.line(surface, color, start_pos, end_pos, MARK_LINE_WIDTH + 2)
 
-    # --- Face tabs ---
-
-    def _draw_face_tabs(
-        self,
-        surface: pygame.Surface,
-        faces: list[Board],
-        active_index: int,
-    ) -> None:
-        """Draw 6 face tabs along the top, color-coded by status."""
-        for i, face in enumerate(faces):
-            x = TAB_START_X + i * (TAB_WIDTH + TAB_GAP)
-            rect = pygame.Rect(x, TAB_Y, TAB_WIDTH, TAB_HEIGHT)
-
-            # Pick background color based on face status
-            if i == active_index:
-                bg = TAB_ACTIVE
-            elif face.status == FaceStatus.WON_X:
-                bg = TAB_WON_X
-            elif face.status == FaceStatus.WON_O:
-                bg = TAB_WON_O
-            elif face.status == FaceStatus.DRAW:
-                bg = TAB_DRAW
-            else:
-                bg = TAB_INACTIVE
-
-            pygame.draw.rect(surface, bg, rect, border_radius=5)
-            pygame.draw.rect(surface, TAB_BORDER, rect, 1, border_radius=5)
-
-            # Label
-            label = FACE_LABELS[i]
-            if face.status == FaceStatus.WON_X:
-                label += " (X)"
-            elif face.status == FaceStatus.WON_O:
-                label += " (O)"
-            elif face.status == FaceStatus.DRAW:
-                label += " (-)"
-
-            text_surf = self._font_tab.render(label, True, TEXT_COLOR)
-            text_rect = text_surf.get_rect(center=rect.center)
-            surface.blit(text_surf, text_rect)
-
     # --- Status bar ---
 
     def _draw_status_bar(
@@ -240,14 +419,18 @@ class Renderer:
         o_score = scores[Player.O]
         score_text = f"X: {x_score}  |  O: {o_score}"
         score_surf = self._font_status.render(score_text, True, TEXT_COLOR)
-        score_rect = score_surf.get_rect(right=WINDOW_WIDTH - 20, top=STATUS_BAR_Y + 10)
+        score_rect = score_surf.get_rect(
+            right=WINDOW_WIDTH - 20, top=STATUS_BAR_Y + 10
+        )
         surface.blit(score_surf, score_rect)
 
     # --- Game over ---
 
     def _draw_game_over(self, surface: pygame.Surface, result_text: str) -> None:
         """Draw a semi-transparent overlay with the final result."""
-        overlay = pygame.Surface((WINDOW_WIDTH, surface.get_height()), pygame.SRCALPHA)
+        overlay = pygame.Surface(
+            (WINDOW_WIDTH, surface.get_height()), pygame.SRCALPHA
+        )
         overlay.fill((0, 0, 0, 160))
         surface.blit(overlay, (0, 0))
 

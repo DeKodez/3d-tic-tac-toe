@@ -4,25 +4,21 @@ from dataclasses import dataclass
 from typing import Optional, Union
 
 from ui.constants import (
+    ARROW_SIZE,
+    ARROWS,
     CELL_SIZE,
     GRID_ORIGIN_X,
     GRID_ORIGIN_Y,
     GRID_WIDTH,
     GRID_HEIGHT,
-    TAB_COUNT,
-    TAB_GAP,
-    TAB_HEIGHT,
-    TAB_START_X,
-    TAB_WIDTH,
-    TAB_Y,
 )
 
 
 @dataclass
-class SwitchFaceAction:
-    """Action indicating the player clicked a face tab."""
+class NavigateAction:
+    """Action indicating the player clicked an arrow to navigate the cube."""
 
-    face_index: int
+    direction: str  # "up", "down", "left", "right"
 
 
 @dataclass
@@ -41,23 +37,23 @@ class InputHandler:
 
     def handle_click(
         self, pos: tuple[int, int]
-    ) -> Optional[Union[SwitchFaceAction, PlaceMoveAction]]:
+    ) -> Optional[Union[NavigateAction, PlaceMoveAction]]:
         """Map a click position to an action.
 
         Args:
             pos: (x, y) pixel coordinates of the mouse click.
 
         Returns:
-            SwitchFaceAction if a face tab was clicked,
+            NavigateAction if an arrow button was clicked,
             PlaceMoveAction if a grid cell was clicked,
             or None if the click was on empty space.
         """
         x, y = pos
 
-        # Check face tabs
-        tab_action = self._check_tab_click(x, y)
-        if tab_action is not None:
-            return tab_action
+        # Check arrow buttons
+        arrow_action = self._check_arrow_click(x, y)
+        if arrow_action is not None:
+            return arrow_action
 
         # Check grid cells
         cell_action = self._check_cell_click(x, y)
@@ -66,16 +62,12 @@ class InputHandler:
 
         return None
 
-    def _check_tab_click(self, x: int, y: int) -> Optional[SwitchFaceAction]:
-        """Check if the click lands on one of the 6 face tabs."""
-        if not (TAB_Y <= y <= TAB_Y + TAB_HEIGHT):
-            return None
-
-        for i in range(TAB_COUNT):
-            tab_x = TAB_START_X + i * (TAB_WIDTH + TAB_GAP)
-            if tab_x <= x <= tab_x + TAB_WIDTH:
-                return SwitchFaceAction(face_index=i)
-
+    def _check_arrow_click(self, x: int, y: int) -> Optional[NavigateAction]:
+        """Check if the click lands on one of the 4 arrow buttons."""
+        for direction, pos in ARROWS.items():
+            ax, ay = pos
+            if ax <= x <= ax + ARROW_SIZE and ay <= y <= ay + ARROW_SIZE:
+                return NavigateAction(direction=direction)
         return None
 
     def _check_cell_click(self, x: int, y: int) -> Optional[PlaceMoveAction]:

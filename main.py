@@ -4,8 +4,8 @@
 import pygame
 
 from game.game_controller import GameController
-from ui.constants import WINDOW_WIDTH, WINDOW_HEIGHT
-from ui.input_handler import InputHandler, SwitchFaceAction, PlaceMoveAction
+from ui.constants import WINDOW_WIDTH, WINDOW_HEIGHT, FACE_ADJACENCY, DEFAULT_FACE
+from ui.input_handler import InputHandler, NavigateAction, PlaceMoveAction
 from ui.renderer import Renderer
 
 
@@ -19,7 +19,7 @@ def main() -> None:
     renderer = Renderer()
     input_handler = InputHandler()
 
-    active_face_index = 0
+    active_face_index = DEFAULT_FACE
     running = True
 
     while running:
@@ -28,16 +28,21 @@ def main() -> None:
                 running = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if game.is_game_over():
+                    running = False
+                    break
+
                 action = input_handler.handle_click(event.pos)
 
-                if isinstance(action, SwitchFaceAction):
-                    active_face_index = action.face_index
+                if isinstance(action, NavigateAction):
+                    active_face_index = FACE_ADJACENCY[active_face_index][
+                        action.direction
+                    ]
 
                 elif isinstance(action, PlaceMoveAction):
-                    if not game.is_game_over():
-                        game.make_move(
-                            active_face_index, action.row, action.col
-                        )
+                    game.make_move(
+                        active_face_index, action.row, action.col
+                    )
 
         renderer.draw(surface, game, active_face_index)
         pygame.display.flip()

@@ -2,4 +2,4 @@
 
 from ui.constants import *
 from ui.renderer import Renderer
-from ui.input_handler import InputHandler, SwitchFaceAction, PlaceMoveAction
+from ui.input_handler import InputHandler, NavigateAction, PlaceMoveAction
