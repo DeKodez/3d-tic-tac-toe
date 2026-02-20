@@ -46,6 +46,18 @@ class Board:
         self._update_status()
         return True
 
+    def reset(self) -> None:
+        """Wipe the board back to its initial empty state.
+
+        Only meaningful for in-progress boards (caller should check).
+        """
+        self.cells = [
+            [CellState.EMPTY for _ in range(3)] for _ in range(3)
+        ]
+        self.status = FaceStatus.IN_PROGRESS
+        self.winner = None
+        self.winning_cells = None
+
     def is_locked(self) -> bool:
         """Returns True if this face is no longer playable (won or drawn)."""
         return self.status != FaceStatus.IN_PROGRESS

@@ -2,6 +2,7 @@
 # pylint: disable=no-member
 
 import math
+import os
 
 import pygame
 
@@ -34,6 +35,7 @@ from ui.constants import (
     FONT_SIZE_START_SUB,
     FONT_SIZE_START_TITLE,
     FONT_SIZE_STATUS,
+    FONT_SIZE_TOGGLE_LABEL,
     GRID_COLOR,
     GRID_HEIGHT,
     GRID_LINE_WIDTH,
@@ -44,6 +46,15 @@ from ui.constants import (
     LOCKED_OVERLAY,
     MARK_LINE_WIDTH,
     MARK_PADDING,
+    NUKE_BUTTON_BG,
+    NUKE_BUTTON_BORDER,
+    NUKE_BUTTON_BORDER_DISABLED,
+    NUKE_BUTTON_DISABLED,
+    NUKE_BUTTON_HOVER,
+    NUKE_BUTTON_SIZE,
+    NUKE_BUTTON_X,
+    NUKE_BUTTON_Y,
+    NUKE_ICON_SIZE,
     NUM_FACES,
     O_COLOR,
     START_SCREEN_BG,
@@ -53,6 +64,9 @@ from ui.constants import (
     STATUS_BAR_Y,
     STATUS_BG,
     TEXT_COLOR,
+    TOGGLE_KNOB_COLOR,
+    TOGGLE_OFF_COLOR,
+    TOGGLE_ON_COLOR,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
     X_COLOR,
@@ -74,7 +88,10 @@ class Renderer:
         self._font_game_over_sub = pygame.font.SysFont(None, FONT_SIZE_GAME_OVER_SUB)
         self._font_start_title = pygame.font.SysFont(None, FONT_SIZE_START_TITLE)
         self._font_start_sub = pygame.font.SysFont(None, FONT_SIZE_START_SUB)
+        self._font_toggle_label = pygame.font.SysFont(None, FONT_SIZE_TOGGLE_LABEL)
         self._cube_geometry = self._compute_cube_geometry()
+        self._nuke_icon = self._load_nuke_icon()
+        self._nuke_icon_disabled = self._make_disabled_icon(self._nuke_icon)
 
     def draw(
         self,
@@ -100,6 +117,11 @@ class Renderer:
         # Locked face overlay
         if active_board.is_locked():
             self._draw_locked_overlay(surface, active_board)
+
+        # Nuke button
+        if game.nukes_enabled:
+            can_nuke = game.can_nuke(active_face_index)
+            self._draw_nuke_button(surface, can_nuke, mouse_pos)
 
         self._draw_status_bar(
             surface,
@@ -609,9 +631,74 @@ class Renderer:
         sub_rect = sub_surf.get_rect(center=(center_x, center_y + 100))
         surface.blit(sub_surf, sub_rect)
 
+    # --- Nuke button ---
+
+    @staticmethod
+    def _load_nuke_icon() -> pygame.Surface:
+        """Load and scale the nuke icon PNG."""
+        icon_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "assets", "nuke_button.png"
+        )
+        icon = pygame.image.load(icon_path).convert_alpha()
+        return pygame.transform.smoothscale(icon, (NUKE_ICON_SIZE, NUKE_ICON_SIZE))
+
+    @staticmethod
+    def _make_disabled_icon(icon: pygame.Surface) -> pygame.Surface:
+        """Create a dimmed/greyed-out version of the nuke icon."""
+        disabled = icon.copy()
+        dark = pygame.Surface(disabled.get_size(), pygame.SRCALPHA)
+        dark.fill((0, 0, 0, 160))
+        disabled.blit(dark, (0, 0))
+        return disabled
+
+    def _draw_nuke_button(
+        self,
+        surface: pygame.Surface,
+        can_nuke: bool,
+        mouse_pos: tuple[int, int],
+    ) -> None:
+        """Draw the nuke button in the top-right corner."""
+        rect = pygame.Rect(
+            NUKE_BUTTON_X, NUKE_BUTTON_Y,
+            NUKE_BUTTON_SIZE, NUKE_BUTTON_SIZE,
+        )
+        mx, my = mouse_pos
+        hovered = rect.collidepoint(mx, my)
+
+        if can_nuke:
+            bg_rgba = NUKE_BUTTON_HOVER if hovered else NUKE_BUTTON_BG
+            border = NUKE_BUTTON_BORDER
+            icon = self._nuke_icon
+        else:
+            bg_rgba = (*NUKE_BUTTON_DISABLED, 255)
+            border = NUKE_BUTTON_BORDER_DISABLED
+            icon = self._nuke_icon_disabled
+
+        # Draw background with alpha support
+        bg_surf = pygame.Surface(
+            (NUKE_BUTTON_SIZE, NUKE_BUTTON_SIZE), pygame.SRCALPHA
+        )
+        pygame.draw.rect(
+            bg_surf, bg_rgba,
+            (0, 0, NUKE_BUTTON_SIZE, NUKE_BUTTON_SIZE),
+            border_radius=6,
+        )
+        surface.blit(bg_surf, rect.topleft)
+        pygame.draw.rect(surface, border, rect, 2, border_radius=6)
+
+        # Center icon in button
+        icon_x = rect.x + (NUKE_BUTTON_SIZE - NUKE_ICON_SIZE) // 2
+        icon_y = rect.y + (NUKE_BUTTON_SIZE - NUKE_ICON_SIZE) // 2
+        surface.blit(icon, (icon_x, icon_y))
+
     # --- Start screen ---
 
-    def draw_start_screen(self, surface: pygame.Surface) -> None:
+    def draw_start_screen(
+        self,
+        surface: pygame.Surface,
+        nukes_enabled: bool,
+        mouse_pos: tuple[int, int],
+    ) -> None:
         """Draw a full-window start screen overlay that blocks interaction."""
         overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
         overlay.fill(START_SCREEN_BG)
@@ -631,11 +718,70 @@ class Renderer:
         title_surf = self._font_start_title.render(
             "3D Tic-Tac-Toe", True, TEXT_COLOR
         )
-        title_rect = title_surf.get_rect(center=(center_x, center_y - 20))
+        title_rect = title_surf.get_rect(center=(center_x, center_y - 60))
         surface.blit(title_surf, title_rect)
+
+        # Nuke toggle
+        self._draw_nuke_toggle(surface, nukes_enabled, center_x, center_y, mouse_pos)
 
         sub_surf = self._font_start_sub.render(
             "Click anywhere to start", True, START_SCREEN_TEXT_COLOR
         )
-        sub_rect = sub_surf.get_rect(center=(center_x, center_y + 20))
+        sub_rect = sub_surf.get_rect(center=(center_x, center_y + 60))
         surface.blit(sub_surf, sub_rect)
+
+    def get_nuke_toggle_rect(self) -> pygame.Rect:
+        """Return the clickable rect for the nuke toggle on the start screen."""
+        center_x = WINDOW_WIDTH // 2
+        center_y = WINDOW_HEIGHT // 2
+        toggle_w, toggle_h = 40, 22
+        toggle_x = center_x + 4
+        toggle_y = center_y - toggle_h // 2
+        # Include the label area for a generous click target
+        label_surf = self._font_toggle_label.render("Nukes", True, TEXT_COLOR)
+        total_w = label_surf.get_width() + 10 + toggle_w
+        start_x = center_x - total_w // 2
+        return pygame.Rect(start_x, toggle_y - 4, total_w, toggle_h + 8)
+
+    def _draw_nuke_toggle(
+        self,
+        surface: pygame.Surface,
+        enabled: bool,
+        center_x: int,
+        center_y: int,
+        mouse_pos: tuple[int, int],
+    ) -> None:
+        """Draw a toggle switch with label for the nuke option."""
+        toggle_w, toggle_h = 40, 22
+        label_surf = self._font_toggle_label.render("Nukes", True, TEXT_COLOR)
+        total_w = label_surf.get_width() + 10 + toggle_w
+        start_x = center_x - total_w // 2
+
+        # Label
+        surface.blit(label_surf, (start_x, center_y - label_surf.get_height() // 2))
+
+        # Toggle track
+        track_x = start_x + label_surf.get_width() + 10
+        track_y = center_y - toggle_h // 2
+        track_rect = pygame.Rect(track_x, track_y, toggle_w, toggle_h)
+
+        track_color = TOGGLE_ON_COLOR if enabled else TOGGLE_OFF_COLOR
+        pygame.draw.rect(surface, track_color, track_rect, border_radius=toggle_h // 2)
+
+        # Hover highlight
+        full_rect = self.get_nuke_toggle_rect()
+        if full_rect.collidepoint(mouse_pos):
+            hover_surf = pygame.Surface(
+                (track_rect.width, track_rect.height), pygame.SRCALPHA
+            )
+            hover_surf.fill((255, 255, 255, 30))
+            surface.blit(hover_surf, track_rect.topleft)
+
+        # Knob
+        knob_r = (toggle_h - 4) // 2
+        if enabled:
+            knob_cx = track_x + toggle_w - knob_r - 2
+        else:
+            knob_cx = track_x + knob_r + 2
+        knob_cy = center_y
+        pygame.draw.circle(surface, TOGGLE_KNOB_COLOR, (knob_cx, knob_cy), knob_r)

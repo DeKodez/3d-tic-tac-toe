@@ -5,7 +5,7 @@ import pygame
 
 from game.game_controller import GameController
 from ui.constants import WINDOW_WIDTH, WINDOW_HEIGHT, FACE_ADJACENCY, DEFAULT_FACE
-from ui.input_handler import InputHandler, NavigateAction, PlaceMoveAction
+from ui.input_handler import InputHandler, NavigateAction, NukeAction, PlaceMoveAction
 from ui.renderer import Renderer
 
 
@@ -16,15 +16,18 @@ def main() -> None:
     pygame.display.set_caption("3D Tic-Tac-Toe")
     clock = pygame.time.Clock()
 
-    game = GameController()
     renderer = Renderer()
     input_handler = InputHandler()
 
+    nukes_enabled = False
+    game = GameController(nukes_enabled=nukes_enabled)
     active_face_index = DEFAULT_FACE
     running = True
     on_start_screen = True
 
     while running:
+        mouse_pos = pygame.mouse.get_pos()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -35,7 +38,13 @@ def main() -> None:
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if on_start_screen:
-                    on_start_screen = False
+                    # Check if the nuke toggle was clicked
+                    toggle_rect = renderer.get_nuke_toggle_rect()
+                    if toggle_rect.collidepoint(event.pos):
+                        nukes_enabled = not nukes_enabled
+                    else:
+                        game = GameController(nukes_enabled=nukes_enabled)
+                        on_start_screen = False
                 else:
                     action = input_handler.handle_click(event.pos)
 
@@ -44,6 +53,10 @@ def main() -> None:
                             action.direction
                         ]
 
+                    elif isinstance(action, NukeAction):
+                        if not game.is_game_over():
+                            game.nuke_face(active_face_index)
+
                     elif isinstance(action, PlaceMoveAction):
                         if not game.is_game_over():
                             game.make_move(
@@ -51,9 +64,8 @@ def main() -> None:
                             )
 
         if on_start_screen:
-            renderer.draw_start_screen(surface)
+            renderer.draw_start_screen(surface, nukes_enabled, mouse_pos)
         else:
-            mouse_pos = pygame.mouse.get_pos()
             renderer.draw(surface, game, active_face_index, mouse_pos)
 
         pygame.display.flip()

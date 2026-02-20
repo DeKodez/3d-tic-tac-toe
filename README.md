@@ -19,3 +19,8 @@ python main.py
 - Win a face by getting 3-in-a-row (row, column, or diagonal).
 - A full face with no winner is a draw — no points awarded.
 - Most face wins at the end takes the game. Ties are possible.
+- **Nukes** (optional) — each player gets one nuke per game. Using it wipes the current board clean and costs a turn. Can only target in-progress boards. Enable on the start screen.
+
+## Attribution
+
+- <a href="https://www.flaticon.com/free-icons/nuke" title="nuke icons">Nuke icons created by heisenberg_jr - Flaticon</a>

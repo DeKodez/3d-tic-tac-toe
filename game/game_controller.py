@@ -15,11 +15,16 @@ class GameController:
 
     NUM_FACES = 6
 
-    def __init__(self) -> None:
+    def __init__(self, nukes_enabled: bool = False) -> None:
         self.faces: list[Board] = [Board() for _ in range(self.NUM_FACES)]
         self.current_player: Player = Player.X
         self.score_tracker: ScoreTracker = ScoreTracker()
         self.phase: GamePhase = GamePhase.PLAYING
+        self.nukes_enabled: bool = nukes_enabled
+        self.nukes_used: dict[Player, bool] = {
+            Player.X: False,
+            Player.O: False,
+        }
 
     def make_move(self, face_index: int, row: int, col: int) -> bool:
         """Attempt to place the current player's mark on the given face and cell.
@@ -54,6 +59,51 @@ class GameController:
         self._switch_turn()
         self._check_game_over()
         return True
+
+    def nuke_face(self, face_index: int) -> bool:
+        """Nuke (reset) the board at the given face index.
+
+        The nuke wipes an in-progress board back to empty. It consumes
+        the current player's one-time nuke and ends their turn.
+
+        Args:
+            face_index: Index of the face (0-5).
+
+        Returns:
+            True if the nuke was used, False if it was blocked.
+        """
+        if not self.nukes_enabled:
+            return False
+
+        if self.phase != GamePhase.PLAYING:
+            return False
+
+        if self.nukes_used[self.current_player]:
+            return False
+
+        if not (0 <= face_index < self.NUM_FACES):
+            return False
+
+        face = self.faces[face_index]
+        if face.is_locked():
+            return False
+
+        face.reset()
+        self.nukes_used[self.current_player] = True
+        self._switch_turn()
+        return True
+
+    def can_nuke(self, face_index: int) -> bool:
+        """Return True if the current player can nuke the given face right now."""
+        if not self.nukes_enabled:
+            return False
+        if self.phase != GamePhase.PLAYING:
+            return False
+        if self.nukes_used[self.current_player]:
+            return False
+        if not (0 <= face_index < self.NUM_FACES):
+            return False
+        return not self.faces[face_index].is_locked()
 
     def get_face(self, index: int) -> Board:
         """Return the Board at the given index."""

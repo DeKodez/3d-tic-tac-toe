@@ -11,6 +11,9 @@ from ui.constants import (
     GRID_ORIGIN_Y,
     GRID_WIDTH,
     GRID_HEIGHT,
+    NUKE_BUTTON_SIZE,
+    NUKE_BUTTON_X,
+    NUKE_BUTTON_Y,
 )
 
 
@@ -29,6 +32,11 @@ class PlaceMoveAction:
     col: int
 
 
+@dataclass
+class NukeAction:
+    """Action indicating the player clicked the nuke button."""
+
+
 class InputHandler:
     """Translates mouse click positions into game-meaningful actions.
 
@@ -37,7 +45,7 @@ class InputHandler:
 
     def handle_click(
         self, pos: tuple[int, int]
-    ) -> Optional[Union[NavigateAction, PlaceMoveAction]]:
+    ) -> Optional[Union[NavigateAction, PlaceMoveAction, NukeAction]]:
         """Map a click position to an action.
 
         Args:
@@ -46,9 +54,15 @@ class InputHandler:
         Returns:
             NavigateAction if an arrow button was clicked,
             PlaceMoveAction if a grid cell was clicked,
+            NukeAction if the nuke button was clicked,
             or None if the click was on empty space.
         """
         x, y = pos
+
+        # Check nuke button
+        nuke_action = self._check_nuke_click(x, y)
+        if nuke_action is not None:
+            return nuke_action
 
         # Check arrow buttons
         arrow_action = self._check_arrow_click(x, y)
@@ -86,3 +100,12 @@ class InputHandler:
         row = min(row, 2)
 
         return PlaceMoveAction(row=row, col=col)
+
+    def _check_nuke_click(self, x: int, y: int) -> Optional[NukeAction]:
+        """Check if the click lands on the nuke button."""
+        if (
+            NUKE_BUTTON_X <= x <= NUKE_BUTTON_X + NUKE_BUTTON_SIZE
+            and NUKE_BUTTON_Y <= y <= NUKE_BUTTON_Y + NUKE_BUTTON_SIZE
+        ):
+            return NukeAction()
+        return None
