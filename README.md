@@ -2,6 +2,9 @@
 
 A 2-player local game with 6 independent 3×3 tic-tac-toe faces. Players alternate turns placing X or O on any unlocked face. A face locks when won or drawn. The game ends when all 6 faces are resolved — the player with the most face wins takes the game.
 
+<img width="694" height="568" alt="image" src="https://github.com/user-attachments/assets/05ef94d9-c1ed-405d-bd23-320803adc387" />
+
+
 ## Setup
 
 ```
