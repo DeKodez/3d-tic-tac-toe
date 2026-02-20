@@ -3,6 +3,7 @@
 
 import math
 import os
+from typing import Optional
 
 import pygame
 
@@ -57,6 +58,7 @@ from ui.constants import (
     NUKE_ICON_SIZE,
     NUM_FACES,
     O_COLOR,
+    SKIP_POPUP_BG,
     START_SCREEN_BG,
     START_SCREEN_BORDER,
     START_SCREEN_TEXT_COLOR,
@@ -64,6 +66,16 @@ from ui.constants import (
     STATUS_BAR_Y,
     STATUS_BG,
     TEXT_COLOR,
+    TIMER_COLOR_NORMAL,
+    TIMER_COLOR_URGENT,
+    TIMER_COLOR_WARN,
+    TIMER_INPUT_BG,
+    TIMER_INPUT_BORDER,
+    TIMER_INPUT_BORDER_FOCUSED,
+    TIMER_INPUT_H,
+    TIMER_INPUT_TEXT_COLOR,
+    TIMER_INPUT_W,
+    FONT_SIZE_TIMER,
     TOGGLE_KNOB_COLOR,
     TOGGLE_OFF_COLOR,
     TOGGLE_ON_COLOR,
@@ -89,6 +101,7 @@ class Renderer:
         self._font_start_title = pygame.font.SysFont(None, FONT_SIZE_START_TITLE)
         self._font_start_sub = pygame.font.SysFont(None, FONT_SIZE_START_SUB)
         self._font_toggle_label = pygame.font.SysFont(None, FONT_SIZE_TOGGLE_LABEL)
+        self._font_timer = pygame.font.SysFont(None, FONT_SIZE_TIMER)
         self._cube_geometry = self._compute_cube_geometry()
         self._nuke_icon = self._load_nuke_icon()
         self._nuke_icon_disabled = self._make_disabled_icon(self._nuke_icon)
@@ -99,6 +112,10 @@ class Renderer:
         game: GameController,
         active_face_index: int,
         mouse_pos: tuple[int, int] = (0, 0),
+        timer_remaining: Optional[float] = None,
+        timer_total: Optional[int] = None,
+        skip_popup_alpha: float = 0.0,
+        skipped_player_symbol: str = "",
     ) -> None:
         """Master draw call — clears screen and draws everything."""
         surface.fill(BG_COLOR)
@@ -127,7 +144,12 @@ class Renderer:
             surface,
             game.current_player,
             game.score_tracker.get_scores(),
+            timer_remaining,
+            timer_total,
         )
+
+        if skip_popup_alpha > 0.0:
+            self._draw_skip_popup(surface, skip_popup_alpha, skipped_player_symbol)
 
         if game.is_game_over():
             self._draw_game_over(surface, game.get_result_text(), game.faces)
@@ -549,6 +571,8 @@ class Renderer:
         surface: pygame.Surface,
         current_player: Player,
         scores: dict[Player, int],
+        timer_remaining: Optional[float] = None,
+        timer_total: Optional[int] = None,
     ) -> None:
         """Draw the status bar showing whose turn it is and current scores."""
         bar_rect = pygame.Rect(0, STATUS_BAR_Y, WINDOW_WIDTH, STATUS_BAR_HEIGHT)
@@ -560,6 +584,12 @@ class Renderer:
         turn_surf = self._font_status.render(turn_text, True, turn_color)
         surface.blit(turn_surf, (20, STATUS_BAR_Y + 10))
 
+        # Timer countdown (center)
+        if timer_remaining is not None and timer_total is not None:
+            self._draw_timer_countdown(
+                surface, timer_remaining, timer_total
+            )
+
         # Score (right side)
         x_score = scores[Player.X]
         o_score = scores[Player.O]
@@ -569,6 +599,82 @@ class Renderer:
             right=WINDOW_WIDTH - 20, top=STATUS_BAR_Y + 10
         )
         surface.blit(score_surf, score_rect)
+
+    # --- Timer countdown ---
+
+    def _draw_timer_countdown(
+        self,
+        surface: pygame.Surface,
+        remaining: float,
+        total: int,
+    ) -> None:
+        """Draw a compact timer in the center of the status bar."""
+        secs = max(0, math.ceil(remaining))
+        fraction = remaining / total if total > 0 else 0.0
+
+        # Color shifts: normal → warn → urgent
+        if fraction > 0.5:
+            color = TIMER_COLOR_NORMAL
+        elif fraction > 0.2:
+            color = TIMER_COLOR_WARN
+        else:
+            color = TIMER_COLOR_URGENT
+
+        timer_text = f"{secs}s"
+        text_surf = self._font_timer.render(timer_text, True, color)
+        text_rect = text_surf.get_rect(
+            centerx=WINDOW_WIDTH // 2, centery=STATUS_BAR_Y + STATUS_BAR_HEIGHT // 2
+        )
+        surface.blit(text_surf, text_rect)
+
+        # Thin progress bar underneath the text
+        bar_w = 60
+        bar_h = 3
+        bar_x = WINDOW_WIDTH // 2 - bar_w // 2
+        bar_y = text_rect.bottom + 1
+
+        # Background track
+        pygame.draw.rect(
+            surface, (60, 60, 60),
+            (bar_x, bar_y, bar_w, bar_h),
+            border_radius=1,
+        )
+        # Filled portion
+        fill_w = max(0, int(bar_w * fraction))
+        if fill_w > 0:
+            pygame.draw.rect(
+                surface, color,
+                (bar_x, bar_y, fill_w, bar_h),
+                border_radius=1,
+            )
+
+    # --- Turn-skipped popup ---
+
+    def _draw_skip_popup(
+        self,
+        surface: pygame.Surface,
+        alpha: float,
+        player_symbol: str,
+    ) -> None:
+        """Draw a brief centered popup indicating a turn was skipped."""
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+        a = int(180 * alpha)
+        overlay.fill((0, 0, 0, a))
+        surface.blit(overlay, (0, 0))
+
+        text = f"Player {player_symbol}'s turn skipped!"
+        text_color = (*TEXT_COLOR, int(255 * alpha))
+        text_surf = self._font_face_label.render(text, True, text_color[:3])
+
+        # Apply alpha to the text surface
+        temp = pygame.Surface(text_surf.get_size(), pygame.SRCALPHA)
+        temp.blit(text_surf, (0, 0))
+        temp.set_alpha(int(255 * alpha))
+
+        text_rect = temp.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)
+        )
+        surface.blit(temp, text_rect)
 
     # --- Game over ---
 
@@ -693,10 +799,19 @@ class Renderer:
 
     # --- Start screen ---
 
+    # Layout y-offsets relative to center_y
+    _TITLE_Y_OFFSET = -80
+    _NUKE_ROW_Y_OFFSET = -16
+    _TIMER_ROW_Y_OFFSET = 22
+    _START_HINT_Y_OFFSET = 80
+
     def draw_start_screen(
         self,
         surface: pygame.Surface,
         nukes_enabled: bool,
+        timer_enabled: bool,
+        timer_seconds_text: str,
+        timer_input_focused: bool,
         mouse_pos: tuple[int, int],
     ) -> None:
         """Draw a full-window start screen overlay that blocks interaction."""
@@ -704,56 +819,97 @@ class Renderer:
         overlay.fill(START_SCREEN_BG)
         surface.blit(overlay, (0, 0))
 
-        # Border
         pygame.draw.rect(
-            surface,
-            START_SCREEN_BORDER,
-            (0, 0, WINDOW_WIDTH, WINDOW_HEIGHT),
-            4,
+            surface, START_SCREEN_BORDER,
+            (0, 0, WINDOW_WIDTH, WINDOW_HEIGHT), 4,
         )
 
-        center_x = WINDOW_WIDTH // 2
-        center_y = WINDOW_HEIGHT // 2
+        cx = WINDOW_WIDTH // 2
+        cy = WINDOW_HEIGHT // 2
 
+        # Title
         title_surf = self._font_start_title.render(
             "3D Tic-Tac-Toe", True, TEXT_COLOR
         )
-        title_rect = title_surf.get_rect(center=(center_x, center_y - 60))
+        title_rect = title_surf.get_rect(center=(cx, cy + self._TITLE_Y_OFFSET))
         surface.blit(title_surf, title_rect)
 
-        # Nuke toggle
-        self._draw_nuke_toggle(surface, nukes_enabled, center_x, center_y, mouse_pos)
+        # Nuke toggle row
+        self._draw_toggle_row(
+            surface, "Nukes", nukes_enabled,
+            cx, cy + self._NUKE_ROW_Y_OFFSET, mouse_pos,
+        )
 
+        # Timer toggle row
+        self._draw_toggle_row(
+            surface, "Timer", timer_enabled,
+            cx, cy + self._TIMER_ROW_Y_OFFSET, mouse_pos,
+        )
+
+        # Timer seconds input (only when timer is on)
+        if timer_enabled:
+            self._draw_timer_input(
+                surface, timer_seconds_text, timer_input_focused,
+                cx, cy + self._TIMER_ROW_Y_OFFSET, mouse_pos,
+            )
+
+        # Start hint
         sub_surf = self._font_start_sub.render(
             "Click anywhere to start", True, START_SCREEN_TEXT_COLOR
         )
-        sub_rect = sub_surf.get_rect(center=(center_x, center_y + 60))
+        sub_rect = sub_surf.get_rect(center=(cx, cy + self._START_HINT_Y_OFFSET))
         surface.blit(sub_surf, sub_rect)
 
-    def get_nuke_toggle_rect(self) -> pygame.Rect:
-        """Return the clickable rect for the nuke toggle on the start screen."""
-        center_x = WINDOW_WIDTH // 2
-        center_y = WINDOW_HEIGHT // 2
-        toggle_w, toggle_h = 40, 22
-        toggle_x = center_x + 4
-        toggle_y = center_y - toggle_h // 2
-        # Include the label area for a generous click target
-        label_surf = self._font_toggle_label.render("Nukes", True, TEXT_COLOR)
-        total_w = label_surf.get_width() + 10 + toggle_w
-        start_x = center_x - total_w // 2
-        return pygame.Rect(start_x, toggle_y - 4, total_w, toggle_h + 8)
+    # --- Toggle helpers ---
 
-    def _draw_nuke_toggle(
+    def _get_toggle_rect(self, label: str, row_cy: int) -> pygame.Rect:
+        """Return the clickable rect for a toggle row."""
+        toggle_w, toggle_h = 40, 22
+        pad_x, pad_y = 20, 10
+        label_surf = self._font_toggle_label.render(label, True, TEXT_COLOR)
+        total_w = label_surf.get_width() + 10 + toggle_w
+        start_x = WINDOW_WIDTH // 2 - total_w // 2
+        return pygame.Rect(
+            start_x - pad_x,
+            row_cy - toggle_h // 2 - pad_y,
+            total_w + pad_x * 2,
+            toggle_h + pad_y * 2,
+        )
+
+    def get_nuke_toggle_rect(self) -> pygame.Rect:
+        """Return the clickable rect for the nuke toggle."""
+        cy = WINDOW_HEIGHT // 2 + self._NUKE_ROW_Y_OFFSET
+        return self._get_toggle_rect("Nukes", cy)
+
+    def get_timer_toggle_rect(self) -> pygame.Rect:
+        """Return the clickable rect for the timer toggle."""
+        cy = WINDOW_HEIGHT // 2 + self._TIMER_ROW_Y_OFFSET
+        return self._get_toggle_rect("Timer", cy)
+
+    def get_timer_input_rect(self) -> pygame.Rect:
+        """Return the clickable rect for the timer seconds input box."""
+        cx = WINDOW_WIDTH // 2
+        cy = WINDOW_HEIGHT // 2 + self._TIMER_ROW_Y_OFFSET
+        toggle_w = 40
+        label_surf = self._font_toggle_label.render("Timer", True, TEXT_COLOR)
+        total_w = label_surf.get_width() + 10 + toggle_w
+        start_x = cx - total_w // 2
+        input_x = start_x + total_w + 12
+        input_y = cy - TIMER_INPUT_H // 2
+        return pygame.Rect(input_x, input_y, TIMER_INPUT_W, TIMER_INPUT_H)
+
+    def _draw_toggle_row(
         self,
         surface: pygame.Surface,
+        label: str,
         enabled: bool,
         center_x: int,
         center_y: int,
         mouse_pos: tuple[int, int],
     ) -> None:
-        """Draw a toggle switch with label for the nuke option."""
+        """Draw a reusable label + toggle switch row."""
         toggle_w, toggle_h = 40, 22
-        label_surf = self._font_toggle_label.render("Nukes", True, TEXT_COLOR)
+        label_surf = self._font_toggle_label.render(label, True, TEXT_COLOR)
         total_w = label_surf.get_width() + 10 + toggle_w
         start_x = center_x - total_w // 2
 
@@ -769,7 +925,7 @@ class Renderer:
         pygame.draw.rect(surface, track_color, track_rect, border_radius=toggle_h // 2)
 
         # Hover highlight
-        full_rect = self.get_nuke_toggle_rect()
+        full_rect = self._get_toggle_rect(label, center_y)
         if full_rect.collidepoint(mouse_pos):
             hover_surf = pygame.Surface(
                 (track_rect.width, track_rect.height), pygame.SRCALPHA
@@ -779,9 +935,36 @@ class Renderer:
 
         # Knob
         knob_r = (toggle_h - 4) // 2
-        if enabled:
-            knob_cx = track_x + toggle_w - knob_r - 2
-        else:
-            knob_cx = track_x + knob_r + 2
-        knob_cy = center_y
-        pygame.draw.circle(surface, TOGGLE_KNOB_COLOR, (knob_cx, knob_cy), knob_r)
+        knob_cx = (track_x + toggle_w - knob_r - 2) if enabled else (track_x + knob_r + 2)
+        pygame.draw.circle(surface, TOGGLE_KNOB_COLOR, (knob_cx, center_y), knob_r)
+
+    def _draw_timer_input(
+        self,
+        surface: pygame.Surface,
+        text: str,
+        focused: bool,
+        center_x: int,
+        center_y: int,
+        mouse_pos: tuple[int, int],
+    ) -> None:
+        """Draw the seconds input box to the right of the timer toggle."""
+        rect = self.get_timer_input_rect()
+
+        # Background
+        pygame.draw.rect(surface, TIMER_INPUT_BG, rect, border_radius=4)
+
+        # Border — highlighted when focused
+        border_color = TIMER_INPUT_BORDER_FOCUSED if focused else TIMER_INPUT_BORDER
+        if not focused and rect.collidepoint(mouse_pos):
+            border_color = (160, 160, 160)
+        pygame.draw.rect(surface, border_color, rect, 2, border_radius=4)
+
+        # Value text
+        display = text if text else "–"
+        text_surf = self._font_toggle_label.render(display, True, TIMER_INPUT_TEXT_COLOR)
+        text_rect = text_surf.get_rect(center=rect.center)
+        surface.blit(text_surf, text_rect)
+
+        # "s" suffix
+        suffix_surf = self._font_toggle_label.render("s", True, (120, 120, 120))
+        surface.blit(suffix_surf, (rect.right + 4, rect.centery - suffix_surf.get_height() // 2))

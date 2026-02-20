@@ -20,6 +20,7 @@ python main.py
 - A full face with no winner is a draw — no points awarded.
 - Most face wins at the end takes the game. Ties are possible.
 - **Nukes** (optional) — each player gets one nuke per game. Using it wipes the current board clean and costs a turn. Can only target in-progress boards. Enable on the start screen.
+- **Turn Timer** (optional) — set a time limit per turn (1–60 seconds). If a player runs out of time, their turn is skipped. Enable and configure on the start screen.
 
 ## Attribution
 

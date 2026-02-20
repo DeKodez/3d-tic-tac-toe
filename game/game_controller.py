@@ -105,6 +105,17 @@ class GameController:
             return False
         return not self.faces[face_index].is_locked()
 
+    def skip_turn(self) -> bool:
+        """Skip the current player's turn (e.g. timer expired).
+
+        Returns:
+            True if the turn was skipped, False if the game isn't playing.
+        """
+        if self.phase != GamePhase.PLAYING:
+            return False
+        self._switch_turn()
+        return True
+
     def get_face(self, index: int) -> Board:
         """Return the Board at the given index."""
         return self.faces[index]
