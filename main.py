@@ -22,6 +22,7 @@ def main() -> None:
 
     active_face_index = DEFAULT_FACE
     running = True
+    on_start_screen = True
 
     while running:
         for event in pygame.event.get():
@@ -33,21 +34,28 @@ def main() -> None:
                     running = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                action = input_handler.handle_click(event.pos)
+                if on_start_screen:
+                    on_start_screen = False
+                else:
+                    action = input_handler.handle_click(event.pos)
 
-                if isinstance(action, NavigateAction):
-                    active_face_index = FACE_ADJACENCY[active_face_index][
-                        action.direction
-                    ]
+                    if isinstance(action, NavigateAction):
+                        active_face_index = FACE_ADJACENCY[active_face_index][
+                            action.direction
+                        ]
 
-                elif isinstance(action, PlaceMoveAction):
-                    if not game.is_game_over():
-                        game.make_move(
-                            active_face_index, action.row, action.col
-                        )
+                    elif isinstance(action, PlaceMoveAction):
+                        if not game.is_game_over():
+                            game.make_move(
+                                active_face_index, action.row, action.col
+                            )
 
-        mouse_pos = pygame.mouse.get_pos()
-        renderer.draw(surface, game, active_face_index, mouse_pos)
+        if on_start_screen:
+            renderer.draw_start_screen(surface)
+        else:
+            mouse_pos = pygame.mouse.get_pos()
+            renderer.draw(surface, game, active_face_index, mouse_pos)
+
         pygame.display.flip()
         clock.tick(30)
 

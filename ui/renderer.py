@@ -31,6 +31,8 @@ from ui.constants import (
     FONT_SIZE_GAME_OVER,
     FONT_SIZE_GAME_OVER_SUB,
     FONT_SIZE_LOCKED_LABEL,
+    FONT_SIZE_START_SUB,
+    FONT_SIZE_START_TITLE,
     FONT_SIZE_STATUS,
     GRID_COLOR,
     GRID_HEIGHT,
@@ -44,6 +46,9 @@ from ui.constants import (
     MARK_PADDING,
     NUM_FACES,
     O_COLOR,
+    START_SCREEN_BG,
+    START_SCREEN_BORDER,
+    START_SCREEN_TEXT_COLOR,
     STATUS_BAR_HEIGHT,
     STATUS_BAR_Y,
     STATUS_BG,
@@ -67,6 +72,8 @@ class Renderer:
         self._font_locked_label = pygame.font.SysFont(None, FONT_SIZE_LOCKED_LABEL)
         self._font_game_over = pygame.font.SysFont(None, FONT_SIZE_GAME_OVER)
         self._font_game_over_sub = pygame.font.SysFont(None, FONT_SIZE_GAME_OVER_SUB)
+        self._font_start_title = pygame.font.SysFont(None, FONT_SIZE_START_TITLE)
+        self._font_start_sub = pygame.font.SysFont(None, FONT_SIZE_START_SUB)
         self._cube_geometry = self._compute_cube_geometry()
 
     def draw(
@@ -600,4 +607,35 @@ class Renderer:
         sub_text = "Navigate with arrows to review  |  Press ESC to exit"
         sub_surf = self._font_game_over_sub.render(sub_text, True, (160, 160, 160))
         sub_rect = sub_surf.get_rect(center=(center_x, center_y + 100))
+        surface.blit(sub_surf, sub_rect)
+
+    # --- Start screen ---
+
+    def draw_start_screen(self, surface: pygame.Surface) -> None:
+        """Draw a full-window start screen overlay that blocks interaction."""
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        overlay.fill(START_SCREEN_BG)
+        surface.blit(overlay, (0, 0))
+
+        # Border
+        pygame.draw.rect(
+            surface,
+            START_SCREEN_BORDER,
+            (0, 0, WINDOW_WIDTH, WINDOW_HEIGHT),
+            4,
+        )
+
+        center_x = WINDOW_WIDTH // 2
+        center_y = WINDOW_HEIGHT // 2
+
+        title_surf = self._font_start_title.render(
+            "3D Tic-Tac-Toe", True, TEXT_COLOR
+        )
+        title_rect = title_surf.get_rect(center=(center_x, center_y - 20))
+        surface.blit(title_surf, title_rect)
+
+        sub_surf = self._font_start_sub.render(
+            "Click anywhere to start", True, START_SCREEN_TEXT_COLOR
+        )
+        sub_rect = sub_surf.get_rect(center=(center_x, center_y + 20))
         surface.blit(sub_surf, sub_rect)
