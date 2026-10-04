@@ -11,6 +11,8 @@ from game.board import Board
 from game.enums import CellState, FaceStatus, Player
 from game.game_controller import GameController
 from ui.constants import (
+    ACTIVE_FACE_BORDER_WIDTH,
+    ACTIVE_FACE_COLOR,
     ARROW_BG,
     ARROW_HOVER,
     ARROW_ICON,
@@ -43,6 +45,7 @@ from ui.constants import (
     GRID_ORIGIN_X,
     GRID_ORIGIN_Y,
     GRID_WIDTH,
+    INACTIVE_OVERLAY,
     LOCKED_LABEL_COLOR,
     LOCKED_OVERLAY,
     MARK_LINE_WIDTH,
@@ -121,19 +124,37 @@ class Renderer:
         surface.fill(BG_COLOR)
 
         active_board = game.get_face(active_face_index)
+        in_play = (
+            active_face_index == game.active_face
+            and not active_board.is_locked()
+            and not game.is_game_over()
+        )
 
-        self._draw_face_label(surface, active_face_index, active_board)
-        self._draw_cube_legend(surface, active_face_index, game.faces)
+        self._draw_face_label(surface, active_face_index, active_board, in_play)
+        self._draw_cube_legend(
+            surface, active_face_index, game.faces, game.active_face
+        )
         self._draw_arrows(surface, active_face_index, game.faces, mouse_pos)
         self._draw_grid(surface, active_board)
 
-        # Hover highlight on valid cells
-        if not active_board.is_locked() and not game.is_game_over():
+        # Hover highlight on valid cells (only on the face in play)
+        if in_play:
             self._draw_cell_hover(surface, active_board, mouse_pos)
 
         # Locked face overlay
         if active_board.is_locked():
             self._draw_locked_overlay(surface, active_board)
+        elif not in_play:
+            self._draw_inactive_overlay(surface, game.active_face)
+
+        # Gold frame around the face in play
+        if in_play:
+            border_rect = pygame.Rect(
+                GRID_ORIGIN_X, GRID_ORIGIN_Y, GRID_WIDTH, GRID_HEIGHT
+            )
+            pygame.draw.rect(
+                surface, ACTIVE_FACE_COLOR, border_rect, ACTIVE_FACE_BORDER_WIDTH
+            )
 
         # Nuke button
         if game.nukes_enabled:
@@ -144,6 +165,7 @@ class Renderer:
             surface,
             game.current_player,
             game.score_tracker.get_scores(),
+            game.active_face,
             timer_remaining,
             timer_total,
         )
@@ -157,7 +179,11 @@ class Renderer:
     # --- Face label (top center) ---
 
     def _draw_face_label(
-        self, surface: pygame.Surface, face_index: int, board: Board
+        self,
+        surface: pygame.Surface,
+        face_index: int,
+        board: Board,
+        in_play: bool,
     ) -> None:
         """Draw the current face name and status above the grid."""
         label = FACE_LABELS[face_index]
@@ -171,12 +197,35 @@ class Renderer:
         elif board.status == FaceStatus.DRAW:
             label += "  \u2014  Draw"
             color = (150, 150, 150)
+        elif in_play:
+            label += "  \u2014  In play"
+            color = ACTIVE_FACE_COLOR
         else:
-            color = TEXT_COLOR
+            label += "  \u2014  not in play"
+            color = (130, 130, 130)
 
         text_surf = self._font_face_label.render(label, True, color)
         text_rect = text_surf.get_rect(centerx=WINDOW_WIDTH // 2, y=FACE_LABEL_Y)
         surface.blit(text_surf, text_rect)
+
+    # --- Inactive face overlay ---
+
+    def _draw_inactive_overlay(
+        self, surface: pygame.Surface, active_face_index: int
+    ) -> None:
+        """Dim a face that is not in play and point at the active one."""
+        ox, oy = GRID_ORIGIN_X, GRID_ORIGIN_Y
+        overlay = pygame.Surface((GRID_WIDTH, GRID_HEIGHT), pygame.SRCALPHA)
+        overlay.fill(INACTIVE_OVERLAY)
+        surface.blit(overlay, (ox, oy))
+
+        hint = f"Not in play \u2014 {FACE_LABELS[active_face_index]} is active"
+        label_surf = self._font_locked_label.render(hint, True, ACTIVE_FACE_COLOR)
+        label_rect = label_surf.get_rect(
+            centerx=ox + GRID_WIDTH // 2,
+            centery=oy + GRID_HEIGHT // 2,
+        )
+        surface.blit(label_surf, label_rect)
 
     # --- Cell hover highlight ---
 
@@ -295,8 +344,9 @@ class Renderer:
         surface: pygame.Surface,
         active_face_index: int,
         faces: list[Board],
+        in_play_face: int,
     ) -> None:
-        """Draw the mini isometric cube with the active face highlighted."""
+        """Draw the mini isometric cube with the face in play highlighted."""
         geo = self._cube_geometry
 
         # Fill won/drawn faces with tinted colors
@@ -314,9 +364,13 @@ class Renderer:
                     surface, geo["face_polygons"][i], (150, 150, 150, 40)
                 )
 
-        # Highlight the active face
+        # Highlight the viewed face (white), then the face in play (gold)
+        if active_face_index != in_play_face:
+            self._fill_polygon_alpha(
+                surface, geo["face_polygons"][active_face_index], (255, 255, 255, 70)
+            )
         self._fill_polygon_alpha(
-            surface, geo["face_polygons"][active_face_index], (255, 255, 255, 80)
+            surface, geo["face_polygons"][in_play_face], (*ACTIVE_FACE_COLOR, 110)
         )
 
         # Outer hexagon edges (solid)
@@ -571,6 +625,7 @@ class Renderer:
         surface: pygame.Surface,
         current_player: Player,
         scores: dict[Player, int],
+        active_face: int,
         timer_remaining: Optional[float] = None,
         timer_total: Optional[int] = None,
     ) -> None:
@@ -578,9 +633,12 @@ class Renderer:
         bar_rect = pygame.Rect(0, STATUS_BAR_Y, WINDOW_WIDTH, STATUS_BAR_HEIGHT)
         pygame.draw.rect(surface, STATUS_BG, bar_rect)
 
-        # Turn indicator (left side)
+        # Turn indicator (left side), with the face in play
         turn_color = X_COLOR if current_player == Player.X else O_COLOR
-        turn_text = f"Player {current_player.symbol}'s turn"
+        turn_text = (
+            f"Player {current_player.symbol}'s turn"
+            f"  \u00b7  {FACE_LABELS[active_face]} in play"
+        )
         turn_surf = self._font_status.render(turn_text, True, turn_color)
         surface.blit(turn_surf, (20, STATUS_BAR_Y + 10))
 

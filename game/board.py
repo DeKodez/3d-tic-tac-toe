@@ -62,6 +62,14 @@ class Board:
         """Returns True if this face is no longer playable (won or drawn)."""
         return self.status != FaceStatus.IN_PROGRESS
 
+    def is_empty(self) -> bool:
+        """Returns True if no marks have been placed on this face."""
+        return all(
+            self.cells[row][col] == CellState.EMPTY
+            for row in range(3)
+            for col in range(3)
+        )
+
     def get_cell(self, row: int, col: int) -> CellState:
         """Returns the state of a specific cell."""
         return self.cells[row][col]

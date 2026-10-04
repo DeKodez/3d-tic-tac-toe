@@ -1,5 +1,12 @@
 """UI constants — colors, dimensions, layout positions, and labels."""
 
+from game.faces import (  # noqa: F401  (re-exported for UI modules)
+    DEFAULT_FACE,
+    FACE_ADJACENCY,
+    FACE_LABELS,
+    NUM_FACES,
+)
+
 # --- Colors (R, G, B) ---
 BG_COLOR = (30, 30, 30)
 GRID_COLOR = (200, 200, 200)
@@ -115,22 +122,10 @@ FACE_LABEL_Y = 20
 STATUS_BAR_Y = GRID_ORIGIN_Y + GRID_HEIGHT + ARROW_SIZE + 24
 STATUS_BAR_HEIGHT = 40
 
-# --- Face definitions ---
-FACE_LABELS = ["Top", "Front", "Left", "Bottom", "Back", "Right"]
-NUM_FACES = 6
-DEFAULT_FACE = 1  # Start on Front
-
-# Navigation adjacency: face_index -> {direction: next_face_index}
-# Horizontal ring: Front -> Right -> Back -> Left -> Front
-# Vertical ring:   Front -> Top -> Back -> Bottom -> Front
-FACE_ADJACENCY = {
-    0: {"left": 2, "right": 5, "up": 4, "down": 1},   # Top
-    1: {"left": 2, "right": 5, "up": 0, "down": 3},   # Front
-    2: {"left": 4, "right": 1, "up": 0, "down": 3},   # Left
-    3: {"left": 2, "right": 5, "up": 1, "down": 4},   # Bottom
-    4: {"left": 5, "right": 2, "up": 3, "down": 0},   # Back
-    5: {"left": 1, "right": 4, "up": 0, "down": 3},   # Right
-}
+# --- Face in play ---
+ACTIVE_FACE_COLOR = (255, 209, 102)        # gold highlight on the face in play
+ACTIVE_FACE_BORDER_WIDTH = 3
+INACTIVE_OVERLAY = (0, 0, 0, 130)          # dim veil over faces not in play
 
 # --- Fonts ---
 FONT_SIZE_STATUS = 22

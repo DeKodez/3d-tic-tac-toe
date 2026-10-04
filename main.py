@@ -29,7 +29,7 @@ def main() -> None:
     input_handler = InputHandler()
 
     # --- Start-screen option state ---
-    nukes_enabled = False
+    nukes_enabled = True
     timer_enabled = False
     timer_seconds_text = "15"
     timer_input_focused = False
@@ -91,7 +91,7 @@ def main() -> None:
         timer_seconds_text = str(val)
         timer_total = val if timer_enabled else 0
         game = GameController(nukes_enabled=nukes_enabled)
-        active_face_index = DEFAULT_FACE
+        active_face_index = game.active_face
         on_start_screen = False
         _reset_turn_timer()
 
@@ -148,6 +148,7 @@ def main() -> None:
                     elif isinstance(action, NukeAction):
                         if not game.is_game_over():
                             if game.nuke_face(active_face_index):
+                                active_face_index = game.active_face
                                 _reset_turn_timer()
 
                     elif isinstance(action, PlaceMoveAction):
@@ -155,6 +156,8 @@ def main() -> None:
                             if game.make_move(
                                 active_face_index, action.row, action.col
                             ):
+                                # The cube rotates: follow the face in play
+                                active_face_index = game.active_face
                                 _reset_turn_timer()
 
         if on_start_screen:
